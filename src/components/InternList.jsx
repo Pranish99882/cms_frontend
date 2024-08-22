@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
-import { Link } from "react-router-dom";
-import CreateUserModal from "./CreateUserModal"; // Import the modal component
+import CreateUserModal from "./CreateUserModal"; 
 
 const InternList = () => {
   const [users, setUsers] = useState([]);
@@ -9,34 +8,59 @@ const InternList = () => {
   const [error, setError] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [warning, setWarning] = useState("");
-  const [isModalOpen, setIsModalOpen] = useState(false); // State to manage modal visibility
-
+  const [isModalOpen, setIsModalOpen] = useState(false); 
+  const [searchQuery, setSearchQuery] = useState(""); 
+  const [currentPage, setCurrentPage] = useState(1); 
+  const [totalPages, setTotalPages] = useState(1); 
+  const [usersPerPage, setUsersPerPage] = useState(10); 
+  
+  
   useEffect(() => {
     const fetchUsers = async () => {
       try {
-        const response = await axios.get("http://localhost:3000/getAllUsers", {
+        const endpoint = searchQuery
+          ? `http://localhost:3000/searchUser?q=${encodeURIComponent(searchQuery)}&page=${currentPage}&limit=${usersPerPage}`
+          : `http://localhost:3000/getAllUsers?page=${currentPage}&limit=${usersPerPage}`;
+  
+        const response = await axios.get(endpoint, {
           withCredentials: true,
         });
-        const onlyUser = response.data.filter((user) =>
-          user.roleNames.includes("User")
-        );
-        setUsers(onlyUser);
+  
+        let fetchedUsers;
+        let page = 1;
+        let totalPages = 1;
+  
+        if (searchQuery) {
+          // Handle response from searchUser endpoint
+          fetchedUsers = response.data.users.map((result) => result._source); // Extract _source from search results
+          page = response.data.currentPage;
+          totalPages = response.data.totalPages;
+        } else {
+          fetchedUsers = response.data.users;
+          page = response.data.currentPage;
+          totalPages = response.data.totalPages;
+        }
+  
+        setUsers(fetchedUsers);
+        setTotalPages(totalPages);
         setLoading(false);
-
-        const currentUser = response.data.find(
+  
+        const currentUser = fetchedUsers.find(
           (user) => user.email === localStorage.getItem("userEmail")
         );
         if (currentUser && currentUser.roleNames.includes("Admin")) {
           setIsAdmin(true);
         }
       } catch (err) {
+        console.error("Error fetching users:", err);
         setError("Error fetching users");
         setLoading(false);
       }
     };
-
+  
     fetchUsers();
-  }, []);
+  }, [searchQuery, currentPage, usersPerPage]); 
+  
 
   const handleDeleteUser = async (userId) => {
     try {
@@ -56,7 +80,20 @@ const InternList = () => {
   };
 
   const handleCreateUser = (newUser) => {
-    if (newUser.roleNames !== "Admin") setUsers([...users, newUser]); // Add new user to the list
+    // if (newUser.roleNames !== "Admin")
+     setUsers([...users, newUser]); // Add new user to the list
+  };
+
+  const handleSearchChange = (e) => {
+    setSearchQuery(e.target.value);
+    setCurrentPage(1); // Reset to the first page on search
+  };
+
+  // Pagination handler
+  const handlePageChange = (newPage) => {
+    if (newPage >= 1 && newPage <= totalPages) {
+      setCurrentPage(newPage);
+    }
   };
 
   if (loading) return <div>Loading...</div>;
@@ -69,11 +106,20 @@ const InternList = () => {
         {isAdmin && (
           <button
             className="create-button bg-blue-500 text-white py-1 px-2 rounded-md hover:bg-blue-600 transition duration-300 mb-4"
-            onClick={() => setIsModalOpen(true)} // Open the modal on click
+            onClick={() => setIsModalOpen(true)} 
           >
             Create
           </button>
         )}
+        <div className="mb-4 flex justify-end">
+          <input
+            type="text"
+            placeholder="Search users..."
+            value={searchQuery}
+            onChange={handleSearchChange}
+            className="border border-gray-300 p-2 rounded-lg w-60"
+          />
+        </div>
         {warning && (
           <div className="warning-message bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4">
             <strong className="font-bold">Warning:</strong>
@@ -83,44 +129,22 @@ const InternList = () => {
         <table className="w-full border-collapse border border-gray-300">
           <thead>
             <tr className="bg-gray-200">
-              <th className="px-4 py-2 border border-gray-300 text-center">
-                ID
-              </th>
-              <th className="px-4 py-2 border border-gray-300 text-center">
-                Username
-              </th>
-              <th className="px-4 py-2 border border-gray-300 text-center">
-                Email
-              </th>
-              <th className="px-4 py-2 border border-gray-300 text-center">
-                isActive
-              </th>
-              <th className="px-4 py-2 border border-gray-300 text-center">
-                Role Names
-              </th>
-              <th className="px-4 py-2 border border-gray-300 text-center">
-                Actions
-              </th>
+              <th className="px-4 py-2 border border-gray-300 text-center">ID</th>
+              <th className="px-4 py-2 border border-gray-300 text-center">Username</th>
+              <th className="px-4 py-2 border border-gray-300 text-center">Email</th>
+              <th className="px-4 py-2 border border-gray-300 text-center">isActive</th>
+              <th className="px-4 py-2 border border-gray-300 text-center">Role Names</th>
+              <th className="px-4 py-2 border border-gray-300 text-center">Actions</th>
             </tr>
           </thead>
           <tbody>
             {users.map((user) => (
               <tr key={user.id} className="border-b border-gray-200">
-                <td className="px-4 py-2 border border-gray-300 text-center">
-                  {user.id}
-                </td>
-                <td className="px-4 py-2 border border-gray-300 text-center">
-                  {user.username}
-                </td>
-                <td className="px-4 py-2 border border-gray-300 text-center">
-                  {user.email}
-                </td>
-                <td className="px-4 py-2 border border-gray-300 text-center">
-                  {user.isActive ? "Active" : "Inactive"}
-                </td>
-                <td className="px-4 py-2 border border-gray-300 text-center">
-                  {user.roleNames}
-                </td>
+                <td className="px-4 py-2 border border-gray-300 text-center">{user.id}</td>
+                <td className="px-4 py-2 border border-gray-300 text-center">{user.username}</td>
+                <td className="px-4 py-2 border border-gray-300 text-center">{user.email}</td>
+                <td className="px-4 py-2 border border-gray-300 text-center">{user.isActive ? "Active" : "Inactive"}</td>
+                <td className="px-4 py-2 border border-gray-300 text-center">{user.roleNames}</td>
                 <td className="px-4 py-2 border border-gray-300 text-center">
                   <button
                     className="delete-button bg-red-500 text-white py-1 px-2 rounded-md hover:bg-red-600 transition duration-300"
@@ -133,22 +157,32 @@ const InternList = () => {
             ))}
           </tbody>
         </table>
+        <div className="mt-4 flex justify-between items-center">
+          <button
+            className="pagination-button bg-gray-300 text-gray-800 py-1 px-2 rounded-md hover:bg-gray-400 transition duration-300"
+            disabled={currentPage === 1}
+            onClick={() => handlePageChange(currentPage - 1)}
+          >
+            Previous
+          </button>
+          <span className="text-gray-800">
+            Page {currentPage} of {totalPages}
+          </span>
+          <button
+            className="pagination-button bg-gray-300 text-gray-800 py-1 px-2 rounded-md hover:bg-gray-400 transition duration-300"
+            disabled={currentPage === totalPages}
+            onClick={() => handlePageChange(currentPage + 1)}
+          >
+            Next
+          </button>
+        </div>
       </div>
       <br />
-      {isAdmin && (
-        <Link to={`/admin_listing`}>
-          <button
-            className="create-button bg-blue-500 text-white py-1 px-2 rounded-md hover:bg-blue-600 transition duration-300 mb-4"
-            onClick={() => console.log("Create user modal logic here")}
-          >
-            ADMIN-TABLE
-          </button>
-        </Link>
-      )}
+     
       {isModalOpen && (
         <CreateUserModal
-          onClose={() => setIsModalOpen(false)} // Close the modal
-          onUserCreated={handleCreateUser} // Handle the new user creation
+          onClose={() => setIsModalOpen(false)}
+          onUserCreated={handleCreateUser} 
         />
       )}
     </div>
